@@ -14,10 +14,13 @@ release = '0.1.0'
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = []
+extensions = ['sphinx.ext.autodoc',
+             'nbsphinx',
+             'myst_nb']
 
 templates_path = ['_templates']
 exclude_patterns = []
+autodoc_mock_imports = ["pandas", "numpy","celltag_tools","scipy","matplotlib"]
 
 
 
@@ -34,9 +37,6 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../'))
 html_theme = 'sphinx_rtd_theme'
-extensions = ['sphinx.ext.autodoc',
-             'nbsphinx',
-             'myst_nb']
 
 #disable tutorial NB execution
 nbsphinx_execute = 'never'
