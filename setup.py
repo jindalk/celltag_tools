@@ -1,7 +1,6 @@
 import os
 from setuptools import setup, find_packages
 
-
 install_requires=[
         "numpy>=1.21.0",
         "pandas>=1.3.0",

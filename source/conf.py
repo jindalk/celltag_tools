@@ -21,6 +21,13 @@ extensions = ['sphinx.ext.autodoc',
 templates_path = ['_templates']
 exclude_patterns = []
 
+import os
+
+on_rtd = os.getenv("READTHEDOCS") == "True"
+
+if on_rtd:
+    autodoc_mock_imports = ["celltag_tools"]
+
 nitpicky = True
 
 
