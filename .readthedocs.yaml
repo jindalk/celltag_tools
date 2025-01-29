@@ -5,6 +5,10 @@ build:
     python: "3.13"
   apt_packages:
     - cmake
+    - build-essential
+    - pkg-config
+    - libxml2-dev
+    - libz-dev
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
