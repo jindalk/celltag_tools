@@ -47,5 +47,6 @@ html_theme = 'sphinx_rtd_theme'
 
 #disable tutorial NB execution
 nbsphinx_execute = 'never'
+nb_execution_mode = "off"
 
 
