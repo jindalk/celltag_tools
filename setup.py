@@ -1,5 +1,15 @@
 from setuptools import setup, find_packages
 
+install_requires=[
+        "numpy>=1.21.0",
+        "pandas>=1.3.0",
+        "matplotlib>=3.4.0",
+        "igraph==0.9.8",
+        "scipy>=1.11.4"
+    ]
+
+if not on_rtd:
+    install_requires.append("igraph")
 setup(
     name="celltag_tools",
     version="0.1.0",
@@ -11,12 +21,6 @@ setup(
     package_data={
         "celltag_tools": ["data/*.txt"]
     },
-    install_requires=[
-        "numpy>=1.21.0",
-        "pandas>=1.3.0",
-        "matplotlib>=3.4.0",
-        "igraph==0.9.8",
-        "scipy>=1.11.4"
-    ],
+    install_requires=install_requires,
     python_requires=">=3.6",
 )
