@@ -20,8 +20,9 @@ extensions = ['sphinx.ext.autodoc',
 
 templates_path = ['_templates']
 exclude_patterns = []
-autodoc_mock_imports = ["pandas", "numpy","celltag_tools","scipy","matplotlib"]
+autodoc_mock_imports = ["pandas", "numpy","scipy","matplotlib","igraph"]
 
+nitpicky = True
 
 
 # -- Options for HTML output -------------------------------------------------
