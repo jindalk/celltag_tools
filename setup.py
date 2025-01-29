@@ -1,7 +1,6 @@
 import os
 from setuptools import setup, find_packages
 
-# on_rtd = os.getenv("READTHEDOCS") == "True"
 
 install_requires=[
         "numpy>=1.21.0",
