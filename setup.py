@@ -7,6 +7,7 @@ install_requires=[
         "numpy>=1.21.0",
         "pandas>=1.3.0",
         "matplotlib>=3.4.0",
+        "igraph==0.9.8",
         "scipy>=1.11.4"
     ]
 
