@@ -107,6 +107,7 @@ def call_clones_util(jac_mat_low, cells, jac_th=0.6, return_graph=True):
     vertex_df = pd.DataFrame(cells)
     vertex_df["cb"] = vertex_df[0]
     vertex_df[0] = vertex_df.index
+    vertex_df.columns = ['name','cb']
 
     # create clone graph
     g = ig.Graph.DataFrame(edges=edge_df, directed=False, vertices=vertex_df)
