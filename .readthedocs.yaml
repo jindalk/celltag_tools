@@ -3,6 +3,7 @@ build:
   os: ubuntu-24.04
   tools:
     python: "3.13"
+    cmake: "3.22.0"
 
 # Build documentation in the "docs/" directory with Sphinx
 sphinx:
