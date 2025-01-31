@@ -26,7 +26,7 @@ CellTag-tools: Computational framework for Clonal analysis
 
 
 
-CellTag-tools is a highly scalable and efficient software package for analysing multi-modal single cell lineage tracing data. Read more about CellTagging at `Jindal et al. Nat. Biotech. (2023) <https://www.nature.com/articles/s41587-023-01931-4>`_ , `Kong et al. Nat. Protocols (2020) <https://www.nature.com/articles/s41596-019-0247-2>`_, and `Biddy et al. Nature (2018) <https://www.nature.com/articles/s41586-018-0744-4>`_
+CellTag-tools is a highly scalable and efficient software package for analysing multi-modal single cell lineage tracing data, available on `GitHub <https://github.com/jindalk/celltag_tools>`_. Read more about CellTagging at `Jindal et al. Nat. Biotech. (2023) <https://www.nature.com/articles/s41587-023-01931-4>`_ , `Kong et al. Nat. Protocols (2020) <https://www.nature.com/articles/s41596-019-0247-2>`_, and `Biddy et al. Nature (2018) <https://www.nature.com/articles/s41586-018-0744-4>`_
 
 
 CellTag-tools identifies clonal relationships within single-cell datasets, starting from CellTag reads enabling insights into cellular lineage and dynamics.
