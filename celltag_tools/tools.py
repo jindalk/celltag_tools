@@ -5,8 +5,8 @@ import pandas as pd
 import scipy
 
 from .celltag_data import CellTagData, celltag_mtx_dict
-from .utils import (call_clones_util, check_mtx_dict, jaccard_similarities,
-                    table_to_spmtx)
+from .utils import (_call_clones_util, check_mtx_dict, jaccard_similarities,
+                    table_to_spmtx, _assign_fate_util)
 
 
 def read_celltag(
@@ -380,10 +380,15 @@ def call_clones(
             If False, returns the requested data.
 
     Returns:
-        tuple:
+        tuple | None:
             Depending on `inplace` and `return_graph`:
                 - If `inplace=False` and `return_graph=False`: (jac_mat, clones).
                 - If `inplace=False` and `return_graph=True`: (jac_mat, clone_graph, clones).
+                - If `inplace=True function sets the following attributes on the CellTagData object:
+                    - ct_obj.jaccard_mtx
+                    - ct_obj.clone_table
+                    - ct_obj.thresholds["jaccard"]
+                    - ct_obj.clone_graph (only if `return_graph=True`)
             Where:
                 - jac_mat (scipy.sparse.csr_matrix): Jaccard similarity matrix.
                 - clone_graph (networkx.Graph): Graph where nodes represent cells,
@@ -423,7 +428,7 @@ def call_clones(
     # run clone calling
     cells_met = ct_obj.metric_mtx["cells"].copy()
 
-    clone_res = call_clones_util(
+    clone_res = _call_clones_util(
         scipy.sparse.tril(jac_mat),
         cells_met,
         jac_th=jaccard_th,
@@ -454,3 +459,393 @@ def call_clones(
 
         else:
             return (jac_mat.copy(), clones.copy())
+
+def assign_fate(ct_obj, fate_col = 'day', fate_key='d5', cell_type_key = 'cell_type2', inplace=False):
+    
+    """
+    Assigns a "fate" to each clone in a CellTagData object's clone table, based on
+    the most frequent cell type (`cell_type_key`) present at a specified time point
+    (`fate_key` in column `fate_col`).
+
+    For each clone (identified by `clone.id`), the function finds rows in the clone
+    table where `fate_col == fate_key` and determines the most common `cell_type_key`
+    among those rows. This value is assigned as the clone's "fate," along with the
+    percentage of cells (`fate_pct`) that match this fate within that clone at
+    `fate_key`. If no cells meet the fate criteria (e.g., time point is missing), the
+    clone is labeled with `fate='no_fate_cells'` and `fate_pct=0`.
+
+    Args:
+        ct_obj (CellTagData):
+            A valid CellTagData object containing `clone_table`.
+        fate_col (str, optional):
+            Column name in `clone_table` that defines the time point or condition
+            used to assign fate. Defaults to `'day'`.
+        fate_key (str, optional):
+            A value in `fate_col` specifying which rows represent the "fate" condition.
+            Defaults to `'d5'`.
+        cell_type_key (str, optional):
+            Column name in `clone_table` that specifies the cell type. Defaults to
+            `'cell_type2'`.
+        inplace (bool, optional):
+            If `True`, updates `ct_obj.clone_table` directly. If `False` (default),
+            returns a modified DataFrame without changing `ct_obj`.
+
+    Returns:
+        pandas.DataFrame | None:
+            - If `inplace=False`, returns the updated clone table with new columns
+              `fate` and `fate_pct`.
+            - If `inplace=True`, the function returns `None` and updates
+              `ct_obj.clone_table` in place.
+
+    Raises:
+        ValueError: If `ct_obj` is not a CellTagData object, if `clone_table` is missing
+            or invalid, or if the specified columns (`fate_col`, `cell_type_key`) are
+            not found in the table.
+    """
+
+    #checks
+    if not (isinstance(ct_obj, CellTagData)):
+        raise ValueError("Please provide a valid CellTagData object")
+
+    if not (isinstance(ct_obj.clone_table, pd.DataFrame)):
+        raise ValueError("Clone table is either not available or not a DataFrame, please re-run tl.call_clones") 
+    
+    clone_table = ct_obj.clone_table.copy()
+
+    if not fate_col in clone_table.columns:
+        raise ValueError(f"{fate_col} is not a valid column in the clone_table")
+        
+    if not cell_type_key in clone_table.columns:
+        raise ValueError(f"{cell_type_key} is not a valid column in the clone_table")
+        
+
+    new_table = pd.DataFrame()
+
+    for _,i in clone_table.groupby("clone.id"):
+        clone_curr = _assign_fate_util(i, fate_col = 'day', fate_key='d5', cell_type_key = 'cell_type2')
+        new_table = pd.concat((new_table,clone_curr))
+
+    if(inplace):
+        ct_obj.clone_table = new_table.copy()
+        
+    else:
+        return new_table.copy()
+    
+def naive_atac_rna_pairing(ct_obj, seed = 100, state_day = None, add_fate=True):
+    """
+    Performs a naive pairing of cells labeled as ATAC with those labeled as RNA within
+    the same clone, using `clone_table` of a CellTagData object. Random pairing is done so that every
+    ATAC sibling is matched to an RNA sibling, potentially looping over if the sets differ
+    in size.
+
+    Args:
+        ct_obj (CellTagData):
+            A valid CellTagData object containing `clone_table`.
+        seed (int, optional):
+            Seed value for NumPy's random generator to ensure reproducible pairings.
+            Defaults to 100.
+        state_day (str | None, optional):
+            If provided, restricts the pairing to cells in the `clone_table` where
+            `'day' == state_day`. Defaults to None.
+        add_fate (bool, optional):
+            If True, attempts to append an additional row containing the `fate`
+            value for all paired cells. The column `'fate'` must exist in `clone_table`.
+            Defaults to True.
+
+    Returns:
+        numpy.ndarray:
+            A 2D array of shape (2, N) or (3, N), where N is the total number of pairs.
+            - First row: ATAC cell barcodes
+            - Second row: RNA cell barcodes
+            - Third row (optional): The single fate value repeated for each pair
+              (only if `add_fate` is True and `'fate'` column exists).
+
+    Raises:
+        ValueError: If `ct_obj` is invalid, if `clone_table` is missing or not a DataFrame,
+            or if `add_fate=True` but `'fate'` column is missing.
+    """
+
+    if not (isinstance(ct_obj, CellTagData)):
+        raise ValueError("Please provide a valid CellTagData object")
+
+    if not isinstance(ct_obj.clone_table, pd.DataFrame):
+        raise ValueError("Clone table is either not available or not a DataFrame, please re-run tl.call_clones")
+
+    clone  = ct_obj.clone_table.copy()
+    
+    np.random.seed(seed)
+
+    if(state_day is not None):
+        print("state_day has been provided, performing RNA-ATAC pairing only within the state day.")
+        state_clone = clone[clone['day'] == 'd2'].copy(deep=True)
+    else:
+        state_clone = clone.copy()
+        
+    atac_cells = state_clone[state_clone['assay'] == 'atac']['cell.barcode'].values
+    rna_cells = state_clone[state_clone['assay'] == 'rna']['cell.barcode'].values
+    
+    atac_len = len(atac_cells)
+    rna_len = len(rna_cells)
+    
+    #pair cells
+    if(atac_len == rna_len):
+        pair_list = np.vstack((atac_cells, rna_cells))
+    if(atac_len < rna_len):
+        pair_list = np.hstack((np.vstack((atac_cells, rna_cells[:atac_len])),
+                               np.vstack((np.random.choice(atac_cells, size=rna_len-atac_len), rna_cells[atac_len:]))))
+    if(rna_len < atac_len):
+        pair_list = np.hstack((np.vstack((atac_cells[:rna_len], rna_cells)),
+                               np.vstack((atac_cells[rna_len:], np.random.choice(rna_cells, size=atac_len-rna_len)))))
+
+    if(add_fate and 'fate' in clone.columns):
+        fate_curr = clone['fate'].values[0]
+        fate_curr = np.array([fate_curr]*pair_list.shape[1]).reshape(1,-1)  
+        return(np.vstack((pair_list, fate_curr)))
+        
+    elif(add_fate and 'fate' not in clone.columns):
+        raise ValueError("add_fate set to True but 'fate' column not available in the clone table, please add clonal fates manually or with the tl.assign_fate function")
+    else:
+        return(pair_list)
+        
+def get_clone_celltag_mtx(ct_obj, sig_type="core"):
+    """
+    Builds a clone-by-CellTag matrix from the metric-filtered matrix in a CellTagData
+    object, based on which CellTags are present in each clone.
+
+    For each clone (from `ct_obj.clone_table`):
+    - A sub-matrix of the metric-filtered matrix (`ct_obj.metric_mtx`) is extracted
+      for cells belonging to that clone.
+    - Depending on `sig_type`, a list of CellTags is selected:
+        - "core": CellTags present in more than one cell of the clone.
+        - "union": CellTags present in at least one cell of the clone.
+    - Each clone’s chosen CellTags are accumulated.
+
+    Finally, this information is converted into a sparse matrix via `table_to_spmtx`,
+    returning a clone-by-CellTag matrix of ones (indicating presence of each CellTag
+    in a particular clone).
+
+    Args:
+        ct_obj (CellTagData):
+            A valid CellTagData object, which must include `metric_mtx` and a
+            `clone_table`.
+        sig_type (str, optional):
+            Determines which CellTags define the clone’s "signature":
+            - "core": CellTags present in more than one cell of the clone.
+            - "union": CellTags present in at least one cell of the clone.
+            Defaults to "core".
+
+    Returns:
+        tuple:
+            (sparse_mtx, row_labels, col_labels) as returned by `table_to_spmtx`, where:
+                - row_labels are clone IDs.
+                - col_labels are CellTag identifiers.
+                - sparse_mtx is a clone-by-CellTag matrix of ones indicating presence.
+
+    Raises:
+        ValueError: If `ct_obj` is invalid or does not contain the required
+            metric matrix (`metric_mtx`) or `clone_table`.
+    """
+
+    if not (isinstance(ct_obj, CellTagData)):
+        raise ValueError("Please provide a valid CellTagData object")
+        
+    check_mtx_dict(ct_obj.metric_mtx)
+
+    if not (isinstance(ct_obj.clone_table, pd.DataFrame)):
+        raise ValueError("Clone table is either not available or not a DataFrame, please re-run tl.call_clones")
+
+    clones = ct_obj.clone_table.copy()
+    celltag_mat_met = ct_obj.metric_mtx['mtx'].copy()
+    cells_met = ct_obj.metric_mtx["cells"].copy()
+    celltags_met = ct_obj.metric_mtx["celltags"].copy()
+    
+    clone_id = np.empty([0,])
+    clone_tag = np.empty([0,])
+
+    for i,j in clones.groupby('clone.id'):
+
+        #get clone_mtx
+        clone_mtx_curr = celltag_mat_met[np.isin(cells_met,j['cell.bc']),]
+
+        if(sig_type=="core"):
+            ct_sig = celltags_met[(clone_mtx_curr.sum(axis=0) > 1).nonzero()[1]]
+
+        elif(sig_type=="union"):
+            ct_sig = celltags_met[(clone_mtx_curr.sum(axis=0) > 0).nonzero()[1]]
+
+        clone_tag = np.hstack([clone_tag, ct_sig])
+        clone_id = np.hstack([clone_id, np.ones_like(ct_sig, dtype=int)*i])
+
+
+    return(table_to_spmtx(clone_id, clone_tag, np.ones_like(clone_id, dtype=int)))
+
+
+def ident_sparse_clones(ct_obj, n_largest = 10, density_th = 0.2, plot=False, **kwargs):
+    """
+    Identifies the "sparse" clones among the largest clones in a given metadata table,
+    defined by an edge density threshold. Optionally generates a scatter plot of clone
+    size vs. edge density.
+
+    Args:
+        clone_info (pd.DataFrame):
+            A DataFrame containing per-clone metadata, including columns:
+            - 'clone.id'
+            - 'size' (number of cells in each clone)
+            - 'edge.den' (edge density of the clone subgraph)
+        n_largest (int, optional):
+            Number of top clones by size to consider for filtering. Defaults to 10.
+        density_th (float, optional):
+            Maximum edge density for a clone to be considered "sparse." Defaults to 0.2.
+        plot (bool, optional):
+            If True, returns a matplotlib Axes object with a scatter plot of clone size
+            vs. edge density. Defaults to False.
+        **kwargs:
+            Additional keyword arguments passed to the plotting function (e.g., marker size).
+
+    Returns:
+        pd.DataFrame | tuple[None, matplotlib.axes.Axes]:
+            - If any sparse clones are found, returns a DataFrame subset of
+              `clone_info` containing only those sparse clones. If `plot=True`,
+              also returns the Axes object.
+            - If no sparse clones are found, returns `None`. If `plot=True`,
+              returns `(None, Axes)`.
+
+    Notes:
+        - Sparse clones are defined here as clones that rank among the top
+          `n_largest` by size but have `edge.den < density_th`.
+        - The optional plotting is handled by `plot_size_by_den`.
+    """
+    
+    if not (isinstance(ct_obj, CellTagData)):
+        raise ValueError("Please provide a valid CellTagData object")
+
+    if not (isinstance(ct_obj.clone_info, pd.DataFrame)):
+        raise ValueError("Clone table is either not available or not a DataFrame, please re-run tl.call_clones")
+
+    clone_info = ct_obj.clone_info.copy()
+    
+    clone_info_subset = clone_info.nlargest(n_largest, columns='size')
+    clone_info_subset = clone_info_subset[clone_info_subset['edge.den'] < density_th].copy()
+
+    if(len(clone_info_subset) == 0):
+        print("No sparse clones found!")
+        if(plot):
+            ax=plot_size_by_den(clone_info, **kwargs)
+            return(None, ax)
+        return(None)
+
+    if(plot):
+        from .plotting import plot_size_by_den
+        
+        ax=plot_size_by_den(clone_info, red_clones=clone_info_subset['clone.id'].values, **kwargs)
+        return(clone_info_subset, ax)
+    return(clone_info_subset)
+
+    
+
+def fix_sparse_clones(ct_obj, sparse_ids = None):
+
+    """
+    Reassigns cells from "sparse" clones by splitting them into maximal cliques,
+    then recombines all clones into a new clone table. Useful for refining
+    clone assignments after initial clone calling.
+
+    Specifically, for each clone in `ct_obj.clone_graph` whose index is in
+    `sparse_ids` , we repeatedly extract the largest clique
+    and mark those cells as a new clone until no edges remain.
+
+    Args:
+        ct_obj (CellTagData):
+            A valid CellTagData object with a `clone_graph` attribute representing
+            clonal subgraphs and a `clone_table`.
+        sparse_ids (array-like | None, optional):
+            List of clone IDs (1-based) to be split. If None, the function
+            does nothing and returns immediately. Defaults to None.
+
+    Returns:
+        pd.DataFrame | None:
+            - If `inplace=True`, updates `ct_obj.clone_table` with the newly rebuilt
+              clone assignments and returns `None`.
+            - Otherwise, returns a new clone table (pd.DataFrame) without modifying
+              `ct_obj`.
+
+    Raises:
+        ValueError: If cell number checks fail or if `ct_obj` is not valid.
+
+    Notes:
+        - This function references an `inplace` check near the end, but there's no
+          formal `inplace` argument in its signature. If you want in-place updates,
+          consider adding `inplace=True` to the signature.
+        - The final clone IDs are re-enumerated starting from 1.
+    """
+
+    if(isinstance(sparse_ids, type(None))):
+        print("No sparse clones found")
+        return()
+
+
+    clone_graph = ct_obj.clone_graph
+
+    new_clones = []
+    edge_density = []
+    og_clones = clone_graph.components()
+
+    #define variables for cell number snaity check
+    init_cells = sum([len(i) for i in og_clones])
+    wasted_cells = 0
+    new_cells = 0
+
+    for i in range(len(og_clones)):
+
+        #if sparse clone is encountered
+        if(i in sparse_ids-1):
+            idx_curr = i
+
+            #extract clone
+            sub_gr = clone_graph.induced_subgraph(og_clones[i])
+
+            #extract maximum clique from clone and add to new_clones
+            while sub_gr.ecount() > 0:
+                new_idx = sub_gr.largest_cliques()[0]
+                new_gr = sub_gr.induced_subgraph(new_idx)
+                new_cb = new_gr.vs['cb']
+
+                #add new cb to list
+                new_clones.append(new_cb)
+
+                #assert edge density is 1 and add to density list
+                try:
+                    assert(new_gr.density() == 1)
+                except AssertionError:
+                    print("Maximum clique density is less than 1, graph subsetting is incorrect")
+                    return()
+
+                edge_density.append([new_gr.density()]*len(new_cb))
+
+                sub_gr.delete_vertices(new_idx)
+
+            wasted_cells = wasted_cells + sub_gr.vcount()
+
+        #add to clone list as normal if not sparse ID
+        else:
+            new_clones.append(clone_graph.induced_subgraph(og_clones[i]).vs['cb'])
+            edge_density.append([clone_graph.induced_subgraph(og_clones[i]).density()]*len(og_clones[i]))
+
+    #cell number sanity check
+    new_cells = sum([len(i) for i in new_clones])
+
+    try:
+        assert(new_cells == (init_cells - wasted_cells))
+    except AssertionError:
+        print("Cell number sanity check failed!")
+        return()
+
+    clone_id = [[j+1]*len(i) for j,i in enumerate(new_clones)]
+            
+    #create and return clone table
+    clone_table = pd.concat([pd.DataFrame((i,j,k), index = ['clone.id','cell.bc','edge.den']).T for i,j,k in zip(clone_id,new_clones,edge_density)])
+
+    if inplace:
+        ct_obj.clone_table = clone_table.copy()
+    else:
+        return(clone_table)

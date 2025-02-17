@@ -25,7 +25,10 @@ class CellTagData:
         jaccard_mtx (scipy.sparse.spmatrix | None):
             Jaccard similarity matrix.
         clone_table (pd.DataFrame | None):
-            Table mapping cells to their clones with additional clone statistics.
+            Table mapping cells to their clones.
+        clone_info (pd.DataFrame | None):
+            Table containing clone level metadata.
+            Defaults to None.
     """
 
     def __init__(
@@ -36,6 +39,7 @@ class CellTagData:
         clone_graph=None,
         jaccard_mtx=None,
         clone_table=None,
+        clone_info = None
     ):
         """Initializes the CellTagData object with optional parameters for
         immediate data assignment.
@@ -52,7 +56,10 @@ class CellTagData:
             jaccard_mtx (scipy.sparse.spmatrix | None, optional):
                 Jaccard similarity matrix. Defaults to None.
             clone_table (pd.DataFrame | None, optional):
-                Table mapping cells to their clones with additional clone statistics.
+                Table mapping cells to their clones.
+                Defaults to None.
+            clone_info (pd.DataFrame | None, optional):
+                Table containing clone level metadata.
                 Defaults to None.
         """
 
@@ -71,6 +78,7 @@ class CellTagData:
         )
         self.jaccard_mtx = jaccard_mtx
         self.clone_table = clone_table
+        self.clone_info = clone_info
 
     def save(self, path):
         """Saves the current CellTagData object to a file using pickle
