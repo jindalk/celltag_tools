@@ -69,13 +69,9 @@ class CellTagData:
         self.clone_graph = clone_graph
 
         # matrices
-        self.allow_mtx = celltag_mtx_dict(
-            {"mtx": None, "cells": None, "celltags": None}
-        )
-        self.bin_mtx = celltag_mtx_dict({"mtx": None, "cells": None, "celltags": None})
-        self.metric_mtx = celltag_mtx_dict(
-            {"mtx": None, "cells": None, "celltags": None}
-        )
+        self.allow_mtx = celltag_mtx_dict()
+        self.bin_mtx = celltag_mtx_dict()
+        self.metric_mtx = celltag_mtx_dict()
         self.jaccard_mtx = jaccard_mtx
         self.clone_table = clone_table
         self.clone_info = clone_info
@@ -127,15 +123,30 @@ class celltag_mtx_dict:
     """
 
 
-    def __init__(self, initial_data):
+    _REQUIRED_KEYS = {"mtx", "cells", "celltags"}
+
+    def __init__(self, initial_data=None):
         """Initializes the celltag_mtx_dict with a predefined structure.
 
         Args:
-            initial_data (dict):
+            initial_data (dict | None):
                 A dictionary containing exactly the keys 'mtx', 'cells', and 'celltags'.
                 The values should be compatible with the CellTagData workflow
-                (e.g., sparse matrices, numpy arrays).
+                (e.g., sparse matrices, numpy arrays). If None (the default), an
+                empty skeleton with all three keys set to None is created.
+
+        Raises:
+            KeyError: If `initial_data` is supplied but its keys are not exactly
+                {'mtx', 'cells', 'celltags'}.
         """
+
+        if initial_data is None:
+            initial_data = {key: None for key in self._REQUIRED_KEYS}
+        elif set(initial_data) != self._REQUIRED_KEYS:
+            raise KeyError(
+                f"celltag_mtx_dict requires exactly the keys {self._REQUIRED_KEYS}, "
+                f"got {set(initial_data)}."
+            )
 
         self._data = dict(initial_data)
 
