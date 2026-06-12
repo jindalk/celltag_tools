@@ -743,7 +743,7 @@ def ident_sparse_clones(ct_obj, n_largest = 10, density_th = 0.2, plot=False, **
 
     
 
-def fix_sparse_clones(ct_obj, sparse_ids = None):
+def fix_sparse_clones(ct_obj, sparse_ids = None, inplace = True):
 
     """
     Reassigns cells from "sparse" clones by splitting them into maximal cliques,

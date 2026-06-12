@@ -2,6 +2,7 @@ import igraph as ig
 import numpy as np
 import pandas as pd
 import scipy
+from math import comb
 
 from .celltag_data import CellTagData, celltag_mtx_dict
 
@@ -187,7 +188,7 @@ def find_homoplasy(n_cells, moi, barcode_abundance, ct_min=2, ct_max=25, n_iters
         
     
     for iteration_curr in range(n_iters):
-        if(verbose & iteration_curr%10==0):
+        if verbose and iteration_curr % 10 == 0:
             print(f"Iteration: {iteration_curr}")
     
         #simulate n_cells
@@ -202,7 +203,6 @@ def find_homoplasy(n_cells, moi, barcode_abundance, ct_min=2, ct_max=25, n_iters
 
         #assign tags to each cell
         celltag_sigs = {}
-        seen_lens = set()
 
         #Generating CellTag signatures
         for i in range(len(cells)):
